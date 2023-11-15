@@ -91,7 +91,6 @@ def plot_classification(X_train, y_train, X_test, logits, var):
 
     return fig1, fig2
 
-
 def train_model(task, architecture_info, X_train, y_train, train_loader, X_test, learning_rate=0.01):
     if task=="Regression":
         model = mlp_regression(architecture_info)
@@ -143,9 +142,7 @@ def train_model(task, architecture_info, X_train, y_train, train_loader, X_test,
         fig1, fig2 = plot_classification(X_train, y_train, X_test, logits, var)
         st.pyplot(fig1)
         st.pyplot(fig2)
-
-        
-        
+    
 def generate_data(dataset, n_samples=150, noise=0.1):
     data_generator = DataGenerator(n_samples, noise)
 
@@ -166,7 +163,6 @@ def generate_data(dataset, n_samples=150, noise=0.1):
     elif dataset == 'Spiral':
         return data_generator.generate_spiral_data()
         
-
 def main():
     st.title('End-Layer Bayesian MLP')
 
@@ -220,11 +216,9 @@ def main():
         st.pyplot(fig2)
 
     if st.button('Run Neural Network'):
-
-        train_model(task, architecture_info, X_train, y_train, train_loader, X_test, learning_rate=0.01)
+        with st.spinner(text="Training in progress..."):
+            train_model(task, architecture_info, X_train, y_train, train_loader, X_test, learning_rate=0.01)
         
         
-
-
 if __name__ == '__main__':
     main()
