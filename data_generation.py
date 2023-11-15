@@ -2,6 +2,8 @@ import numpy as np
 from sklearn.datasets import make_blobs, make_moons, make_circles
 from matplotlib import pyplot
 from pandas import DataFrame
+import torch
+import torch.utils.data as data_utils 
 
 class DataGenerator:
     """
@@ -24,8 +26,11 @@ class DataGenerator:
 
         # generate 2d classification dataset
         X, y = make_blobs(n_samples=self.num_samples, centers=2, n_features=2, random_state=1)
-        
-        return X, y
+        X_train = torch.from_numpy(X).float()
+        y_train = torch.from_numpy(y).float()
+        train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(X_train, y_train), batch_size=32, shuffle=True)
+        X_test = torch.linspace(-5, 5, 100).unsqueeze(1)
+        return X_train, y_train, train_loader, X_test
     
     def generate_moon_data(self):
         """
@@ -35,7 +40,11 @@ class DataGenerator:
 
         # generate 2d classification dataset
         X, y = make_moons(n_samples=self.num_samples, noise=self.noise, random_state=1)
-        return X, y
+        X_train = torch.from_numpy(X).float()
+        y_train = torch.from_numpy(y).float()
+        train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(X_train, y_train), batch_size=32, shuffle=True)
+        X_test = torch.linspace(-5, 5, 100).unsqueeze(1)
+        return X_train, y_train, train_loader, X_test
     
     def generate_circles_data(self):
         """
@@ -45,7 +54,11 @@ class DataGenerator:
 
         # generate 2d classification dataset
         X, y = make_circles(n_samples=self.num_samples, noise=self.noise, random_state=1)
-        return X, y
+        X_train = torch.from_numpy(X).float()
+        y_train = torch.from_numpy(y).float()
+        train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(X_train, y_train), batch_size=32, shuffle=True)
+        X_test = torch.linspace(-5, 5, 100).unsqueeze(1)
+        return X_train, y_train, train_loader, X_test
 
     def generate_spiral_data(self):
         # Generate angles for the spirals
@@ -69,6 +82,26 @@ class DataGenerator:
         return X, y
     
     def generate_dataset_1(self):
-        x = np.linspace(-1, 1, self.num_samples)
-        y = x**3 - x**2 + self.noise * np.random.randn(self.num_samples)
-        return x, y
+        torch.manual_seed(711)
+        x = torch.linspace(-2, 2, self.num_samples)
+        y = x.pow(3) - x.pow(2) + self.noise*torch.randn(x.size())
+        x_train = torch.unsqueeze(x, dim=1)
+        y_train = torch.unsqueeze(y, dim=1)
+        train_loader = data_utils.DataLoader(
+            data_utils.TensorDataset(x_train, y_train), 
+            batch_size=self.num_samples
+        )
+        x_test = torch.linspace(-2, 2, 100).unsqueeze(-1)
+        return x_train, y_train, train_loader, x_test
+    
+    def generate_sinusoid_data(self):
+        # create simple sinusoid data set
+        X_train = (torch.rand(self.num_samples) * 8).unsqueeze(-1)
+        y_train = torch.sin(X_train) + torch.randn_like(X_train) * self.noise
+        train_loader = data_utils.DataLoader(
+            data_utils.TensorDataset(X_train, y_train), 
+            batch_size=self.num_samples
+        )
+        X_test = torch.linspace(-5, 13, 100).unsqueeze(-1)
+        return X_train, y_train, train_loader, X_test
+        
