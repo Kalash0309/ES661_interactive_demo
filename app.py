@@ -6,6 +6,7 @@ import torch
 from laplace import Laplace
 from data_generation import DataGenerator
 import torch.utils.data as data_utils 
+from scipy.interpolate import griddata
 
 
 from tensorflow.keras.models import Sequential
@@ -36,34 +37,60 @@ def mlp_classification(architecture_info):
         modules.append(torch.nn.Linear(architecture_info[i]['neurons'], architecture_info[i+1]['neurons']))
     modules.append(torch.nn.ReLU())
     modules.append(torch.nn.Linear(architecture_info[-1]['neurons'], 1))
-    modules.append(torch.nn.Sigmoid())
+    # modules.append(torch.nn.Sigmoid())
 
     return torch.nn.Sequential(*modules)
 
-def plot_regression(X_train, y_train, X_test, f_test, y_std, plot=True, 
-                    file_name='regression_example'):
-    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, sharey=True,
-                                figsize=(4.5, 2.8))
-    ax1.set_title('MAP')
-    ax1.scatter(X_train.flatten(), y_train.flatten(), alpha=0.3, color='tab:orange', label='train')
-    ax1.plot(X_test, f_test, color='black', label='$f_{MAP}$')
-    ax1.legend()
-
-    ax2.set_title('LA')
-    ax2.scatter(X_train.flatten(), y_train.flatten(), alpha=0.3, color='tab:orange')
-    ax2.plot(X_test, f_test, label='$\mathbb{E}[f]$')
-    ax2.fill_between(X_test, f_test-y_std*2, f_test+y_std*2, 
-                     alpha=0.3, color='tab:blue', label='$2\sqrt{\mathbb{V}\,[y]}$')
-    ax2.legend()
-    ax1.set_ylim([-4, 6])
-    ax1.set_xlim([X_test.min(), X_test.max()])
-    ax2.set_xlim([X_test.min(), X_test.max()])
-    ax1.set_ylabel('$y$')
-    ax1.set_xlabel('$x$')
-    ax2.set_xlabel('$x$')
+def plot_regression(X_train, y_train, X_test, f_test, y_std):
+    # fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, sharey=True)
+    fig = plt.figure()
+    plt.title('Mean and Uncertainity Predictions')
+    plt.scatter(X_train.flatten(), y_train.flatten(), alpha=0.3, color='tab:blue', label='Training Data')
+    plt.plot(X_test, f_test, color='black', label='Mean')
+    plt.fill_between(X_test, f_test-y_std*2, f_test+y_std*2, 
+                     alpha=0.3, color='tab:orange', label='95% CI')
+    plt.legend()
+    plt.xlabel('$x$')
+    plt.ylabel('$y$')
     plt.tight_layout()
-    # plt.show()
+    plt.xlim([X_test.min(), X_test.max()])
+    plt.tight_layout()
     return fig
+
+def plot_classification(X_train, y_train, X_test, logits, var):
+    probs = torch.sigmoid(torch.tensor(logits))
+    probs = probs.reshape(X_test.shape[0])
+    var = var.reshape(X_test.shape[0])
+
+    # Extract x and y coordinates from the X_test tensor
+    x = X_test[:, 0].numpy()
+    y = X_test[:, 1].numpy()
+    x_grid, y_grid = np.meshgrid(np.linspace(x.min(), x.max(), 100), np.linspace(y.min(), y.max(), 100))
+    probs_grid = griddata((x, y), probs.numpy(), (x_grid, y_grid), method='linear')
+    var_grid = griddata((x, y), var.numpy(), (x_grid, y_grid), method='linear')
+
+    fig1 = plt.figure()
+    plt.scatter(X_train[:,0], X_train[:,1], s=10, c=y_train, cmap='bwr', label='Training Data')
+    plt.contourf(x_grid, y_grid, probs_grid, cmap='bwr', alpha=0.3, label='Mean')
+    plt.legend()
+    plt.title('Mean Predictions')
+    plt.colorbar()
+    plt.xlabel('$x1$')
+    plt.ylabel('$x2$')
+    plt.tight_layout()
+
+    fig2 = plt.figure()
+    plt.title('Uncertainity Predictions')
+    plt.scatter(X_train[:,0], X_train[:,1], s=10, c=y_train, cmap='bwr', label='Training Data')
+    plt.contourf(x_grid, y_grid, var_grid, cmap='bwr', alpha=0.3, label='Standard Deviation')
+    plt.legend()
+    plt.colorbar()
+    plt.xlabel('$x1$')
+    plt.ylabel('$x2$')
+    plt.tight_layout()
+
+    return fig1, fig2
+
 
 def train_model(task, architecture_info, X_train, y_train, train_loader, X_test, learning_rate=0.01):
     if task=="Regression":
@@ -91,8 +118,7 @@ def train_model(task, architecture_info, X_train, y_train, train_loader, X_test,
         f_sigma = f_var.squeeze().detach().sqrt().cpu().numpy()
         pred_std = np.sqrt(f_sigma**2 + la_regression.sigma_noise.item()**2)
 
-        st.pyplot(plot_regression(X_train, y_train, x, f_mu, pred_std, 
-                file_name='regression_example', plot=False))
+        st.pyplot(plot_regression(X_train, y_train, x, f_mu, pred_std))
         
     else:
         model = mlp_classification(architecture_info)
@@ -101,16 +127,22 @@ def train_model(task, architecture_info, X_train, y_train, train_loader, X_test,
         for epoch in range(1000):
             for x,y in train_loader:
                 optimizer.zero_grad()
-                y_pred = model(x)
-                # y = y.unsqueeze(0).T
+                y_pred = torch.sigmoid(model(x))
+                y = torch.unsqueeze(y, 1)
                 loss = criterion(y_pred, y)
                 loss.backward()
                 optimizer.step()
             if epoch % 100 == 0:
                 print(f'Epoch {epoch}, Loss {loss.item()}')
 
-        la_classification = Laplace(model, 'classification', subset_of_weights='last_layer', hessian_structure='diag')
+        la_classification = Laplace(model, 'regression', subset_of_weights='last_layer', hessian_structure='diag')
+
         la_classification.fit(train_loader)
+        logits, var = la_classification(X_test)
+
+        fig1, fig2 = plot_classification(X_train, y_train, X_test, logits, var)
+        st.pyplot(fig1)
+        st.pyplot(fig2)
 
         
         
@@ -121,6 +153,10 @@ def generate_data(dataset, n_samples=150, noise=0.1):
         return data_generator.generate_dataset_1()
     elif dataset == 'Dataset 2':
         return data_generator.generate_sinusoid_data()
+    elif dataset == 'Dataset 3':
+        return data_generator.generate_dataset_3()
+    elif dataset == 'Dataset 4':
+        return data_generator.generate_dataset_4()
     elif dataset == 'Gaussian':
         return data_generator.generate_gauss_data()
     elif dataset == 'Moons':
@@ -164,7 +200,10 @@ def main():
         X_train, y_train, train_loader, X_test = generate_data(dataset, num_samples, input_noise)
 
         fig1 = plt.figure()
-        plt.scatter(X_train, y_train, s=10, label='train')
+        plt.title(dataset)
+        plt.scatter(X_train, y_train, s=10, label='Training Data')
+        plt.xlabel('$x$')
+        plt.ylabel('$y$')
         plt.legend()    
         st.pyplot(fig1)
 
@@ -173,7 +212,10 @@ def main():
         X_train, y_train, train_loader, X_test = generate_data(dataset, num_samples, input_noise)
 
         fig2 = plt.figure()
-        plt.scatter(X_train[:,0], X_train[:,1], s=10, c=y_train, cmap='Paired')
+        plt.title(dataset)
+        plt.scatter(X_train[:,0], X_train[:,1], s=10, c=y_train, cmap='bwr', label='Training Data')
+        plt.xlabel('$x1$')
+        plt.ylabel('$x2$')
         plt.legend()
         st.pyplot(fig2)
 

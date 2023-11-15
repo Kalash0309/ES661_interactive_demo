@@ -29,7 +29,12 @@ class DataGenerator:
         X_train = torch.from_numpy(X).float()
         y_train = torch.from_numpy(y).float()
         train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(X_train, y_train), batch_size=32, shuffle=True)
-        X_test = torch.linspace(-5, 5, 100).unsqueeze(1)
+        # make grid to evaluate the model
+        X1 = torch.linspace(X_train[:,0].min(), X_train[:,0].max(), 100)
+        X2 = torch.linspace(X_train[:,1].min(), X_train[:,1].max(), 100)
+        X1, X2 = torch.meshgrid(X1, X2)
+        X_test = torch.cat((X1.reshape(-1, 1), X2.reshape(-1, 1)), dim=1)
+        
         return X_train, y_train, train_loader, X_test
     
     def generate_moon_data(self):
@@ -43,7 +48,10 @@ class DataGenerator:
         X_train = torch.from_numpy(X).float()
         y_train = torch.from_numpy(y).float()
         train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(X_train, y_train), batch_size=32, shuffle=True)
-        X_test = torch.linspace(-5, 5, 100).unsqueeze(1)
+        X1 = torch.linspace(X_train[:,0].min(), X_train[:,0].max(), 100)
+        X2 = torch.linspace(X_train[:,1].min(), X_train[:,1].max(), 100)
+        X1, X2 = torch.meshgrid(X1, X2)
+        X_test = torch.cat((X1.reshape(-1, 1), X2.reshape(-1, 1)), dim=1)
         return X_train, y_train, train_loader, X_test
     
     def generate_circles_data(self):
@@ -57,7 +65,10 @@ class DataGenerator:
         X_train = torch.from_numpy(X).float()
         y_train = torch.from_numpy(y).float()
         train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(X_train, y_train), batch_size=32, shuffle=True)
-        X_test = torch.linspace(-5, 5, 100).unsqueeze(1)
+        X1 = torch.linspace(X_train[:,0].min(), X_train[:,0].max(), 100)
+        X2 = torch.linspace(X_train[:,1].min(), X_train[:,1].max(), 100)
+        X1, X2 = torch.meshgrid(X1, X2)
+        X_test = torch.cat((X1.reshape(-1, 1), X2.reshape(-1, 1)), dim=1)
         return X_train, y_train, train_loader, X_test
 
     def generate_spiral_data(self):
@@ -78,8 +89,14 @@ class DataGenerator:
         class_1_points = np.column_stack((x1, y1))
         X = np.vstack((class_0_points, class_1_points))
         y = np.hstack((np.zeros(self.num_samples), np.ones(self.num_samples)))
-
-        return X, y
+        X = torch.from_numpy(X).float()
+        y = torch.from_numpy(y).float()
+        train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(X, y), batch_size=32, shuffle=True)
+        X1 = torch.linspace(X[:,0].min(), X[:,0].max(), 100)
+        X2 = torch.linspace(X[:,1].min(), X[:,1].max(), 100)
+        X1, X2 = torch.meshgrid(X1, X2)
+        X_test = torch.cat((X1.reshape(-1, 1), X2.reshape(-1, 1)), dim=1)
+        return X, y, train_loader, X_test
     
     def generate_dataset_1(self):
         torch.manual_seed(711)
@@ -104,4 +121,29 @@ class DataGenerator:
         )
         X_test = torch.linspace(-5, 13, 100).unsqueeze(-1)
         return X_train, y_train, train_loader, X_test
+    
+    def generate_dataset_3(self):
+        # create simple sinusoid data set
+        torch.manual_seed(711)
+        X_train = (torch.rand(self.num_samples) * 8).unsqueeze(-1)
+        y_train = torch.sin(X_train) - torch.tensor(X_train**2) + torch.randn_like(X_train) * self.noise
+        train_loader = data_utils.DataLoader(
+            data_utils.TensorDataset(X_train, y_train), 
+            batch_size=self.num_samples
+        )
+        x_test = torch.linspace(0, 8, 100).unsqueeze(-1)
+        return X_train, y_train, train_loader, x_test
+    
+    def generate_dataset_4(self):
+        # create simple sinusoid data set
+        torch.manual_seed(711)
+        X_train = (torch.rand(self.num_samples) * 8).unsqueeze(-1)
+        y_train = X_train * torch.sin(X_train) - torch.tensor(X_train**2)* torch.cos(X_train) + 5 - torch.tensor(X_train) + torch.randn_like(X_train) * self.noise
+        train_loader = data_utils.DataLoader(
+            data_utils.TensorDataset(X_train, y_train), 
+            batch_size=self.num_samples
+        )
+        x_test = torch.linspace(0, 8, 100).unsqueeze(-1)
+        return X_train, y_train, train_loader, x_test
+    
         
